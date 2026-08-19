@@ -95,6 +95,26 @@
      color:var(--mute);background:var(--panel-2)}
   tr:last-child td{border-bottom:0}
   td.mono{font-family:var(--mono);font-size:11.5px;color:var(--mute);word-break:break-all}
+  .cov{margin-top:8px}
+  .covrow{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:7px 0;
+          border-bottom:1px solid var(--line);align-items:baseline}
+  .covrow:last-child{border-bottom:0}
+  .covmark{font-family:var(--mono);font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;
+           font-weight:700;padding:3px 5px;border-radius:5px;text-align:center}
+  .m-populated{color:var(--accent);background:var(--accent-dim)}
+  .m-absent{color:var(--mute);background:var(--low-bg)}
+  .m-out-of-scope{color:var(--med);background:var(--med-bg)}
+  .covname{font-size:13.5px}
+  .covval{color:var(--mute);font-size:12px;font-family:var(--mono);word-break:break-all}
+  .covnote{color:var(--mute);font-size:12.5px;font-style:italic}
+  .covhead{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;
+           color:var(--faint);margin:16px 0 4px}
+  .covsum{margin-top:14px;padding:12px 14px;border-radius:9px;background:var(--panel-2);
+          font-size:13px;color:var(--mute)}
+  .tabs{display:flex;gap:6px;margin:18px 0 4px}
+  .tabs button{font:inherit;font-size:12px;font-family:var(--mono);padding:6px 12px;border-radius:7px;
+    border:1px solid var(--line);background:none;color:var(--mute);cursor:pointer}
+  .tabs button[aria-selected="true"]{color:var(--accent);border-color:var(--accent);background:var(--accent-dim)}
   .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}
   .actions a{font-family:var(--mono);font-size:12px;text-decoration:none;padding:9px 15px;
     border-radius:8px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-dim)}
@@ -167,6 +187,7 @@ async function analyse(path) {
   const data = await res.json();
   if (data.error) { el('pane').innerHTML = '<div class="err">' + esc(data.error) + '</div>'; return; }
   render(data.artifact, data.worst, path);
+  loadCoverage(path, 'g7');
 }
 
 function render(a, worst, path) {
@@ -218,11 +239,62 @@ function render(a, worst, path) {
       <td class="mono">${esc((f.sha256 || '').slice(0, 16))}&hellip;</td></tr>`).join('')}
     </tbody></table>
 
+    <h2>Standards coverage</h2>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-std="g7" aria-selected="true">G7 minimum elements</button>
+      <button role="tab" data-std="cert-in" aria-selected="false">CERT-In AIBOM</button>
+    </div>
+    <div class="cov" id="cov"><p class="spin">loading&hellip;</p></div>
+
     <div class="actions">
       <a href="/api/bom?format=cyclonedx&path=${encodeURIComponent(path)}">Download CycloneDX 1.6</a>
       <a href="/api/bom?format=spdx&path=${encodeURIComponent(path)}">Download SPDX 3.0.1</a>
     </div>`;
 }
+
+let covPath = null;
+
+async function loadCoverage(path, standard) {
+  covPath = path;
+  const el = document.getElementById('cov');
+  if (!el) return;
+  el.innerHTML = '<p class="spin">loading&hellip;</p>';
+  const res = await fetch('/api/coverage?standard=' + encodeURIComponent(standard) +
+    '&path=' + encodeURIComponent(path));
+  const r = await res.json();
+  if (r.error) { el.innerHTML = '<div class="err">' + esc(r.error) + '</div>'; return; }
+
+  const label = {populated: 'yes', absent: '\u2014', 'out-of-scope': 'n/a'};
+  let html = '', cluster = '';
+  for (const e of r.elements) {
+    if (e.cluster !== cluster) {
+      cluster = e.cluster;
+      html += '<div class="covhead">' + esc(cluster) + '</div>';
+    }
+    html += '<div class="covrow">'
+      + '<span class="covmark m-' + esc(e.status) + '">' + label[e.status] + '</span>'
+      + '<div><div class="covname">' + esc(e.name) + '</div>'
+      + (e.value ? '<div class="covval">' + esc(e.value) + '</div>' : '')
+      + (e.note ? '<div class="covnote">' + esc(e.note) + '</div>' : '')
+      + '</div></div>';
+  }
+  const total = r.populated + r.absent + r.outOfScope;
+  html += '<div class="covsum"><strong>' + r.populated + ' of ' + total
+    + '</strong> elements populated &middot; ' + r.absent + ' absent from this artifact &middot; '
+    + r.outOfScope + ' not derivable from any model file.<br>'
+    + 'Elements marked <em>n/a</em> need training data, evaluation results or deployment '
+    + 'context \u2014 none of which a static parse can see.</div>';
+  el.innerHTML = html;
+}
+
+document.addEventListener('click', (ev) => {
+  const tab = ev.target.closest('.tabs button[data-std]');
+  if (!tab || !covPath) return;
+  for (const b of tab.parentElement.querySelectorAll('button')) {
+    b.setAttribute('aria-selected', String(b === tab));
+  }
+  loadCoverage(covPath, tab.dataset.std);
+});
 
 const rank = (s) => ({Critical: 0, High: 1, Medium: 2, Low: 3}[s] ?? 4);
 const fmtSize = (n) => {

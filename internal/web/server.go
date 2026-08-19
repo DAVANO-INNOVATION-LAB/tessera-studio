@@ -65,6 +65,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/browse", s.handleBrowse)
 	mux.HandleFunc("GET /api/analyze", s.handleAnalyze)
 	mux.HandleFunc("GET /api/bom", s.handleBOM)
+	mux.HandleFunc("GET /api/coverage", s.handleCoverage)
 	return s.checkHost(securityHeaders(mux))
 }
 
@@ -245,6 +246,40 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		"artifact": art,
 		"worst":    tessera.Worst(art.Findings),
 	})
+}
+
+// handleCoverage reports how far a model goes toward a published
+// minimum-elements standard.
+//
+// This is the view a regulated buyer actually wants, and it is the one that has
+// to be honest: the elements no static parse can supply are shown alongside the
+// ones it fills, with their reasons, rather than being quietly dropped to
+// flatter the total.
+func (s *Server) handleCoverage(w http.ResponseWriter, r *http.Request) {
+	target, err := s.resolve(r.URL.Query().Get("path"))
+	if err != nil {
+		writeErr(w, http.StatusBadRequest, err)
+		return
+	}
+	standard := r.URL.Query().Get("standard")
+	if standard == "" {
+		standard = "g7"
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
+	defer cancel()
+
+	if err := s.acquire(ctx); err != nil {
+		return
+	}
+	defer s.release()
+
+	rep, err := tessera.Coverage(ctx, standard, target)
+	if err != nil {
+		writeErr(w, http.StatusUnprocessableEntity, err)
+		return
+	}
+	writeJSON(w, rep)
 }
 
 // handleBOM returns a rendered bill of materials as a download.

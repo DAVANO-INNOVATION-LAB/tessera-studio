@@ -63,6 +63,12 @@ uninteresting as a target:
 | `GET /api/browse?path=` | list a directory, marking recognised models |
 | `GET /api/analyze?path=` | full analysis as JSON |
 | `GET /api/bom?path=&format=cyclonedx\|spdx` | bill of materials as a download |
+| `GET /api/coverage?path=&standard=g7\|cert-in` | coverage against a published minimum-elements standard |
+
+The coverage view is the one a regulated reader wants, and it is built to be
+honest: elements no static parse can supply — training properties, dataset
+hashes, benchmark results — are shown alongside the ones it fills, each with its
+reason, rather than dropped to flatter the total.
 
 Downloads are reproducible: the BOM is stamped from the model file's own
 modification time rather than the wall clock, so fetching twice gives you the
