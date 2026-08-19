@@ -19,6 +19,17 @@ Tessera exactly the way any other consumer would — by importing it:
 import tessera "github.com/DAVANO-INNOVATION-LAB/tessera"
 ```
 
+Studio depends on the published module, with a checksummed `go.sum` like any
+other consumer — there is no sibling-directory arrangement to reproduce. To work
+on both at once, point Go at a local checkout without editing `go.mod`:
+
+```bash
+go work init . ../tessera
+```
+
+`go.work` is gitignored, so that stays a local convenience and never becomes a
+condition of building this repository.
+
 Nothing in the analyser knows Studio exists. That direction of dependency is the
 point: the analyser stays a small, embeddable, zero-dependency library, and the
 interface is one of several things built on top of it. Studio's own module graph

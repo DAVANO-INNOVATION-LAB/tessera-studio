@@ -23,13 +23,6 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
-      # Studio depends on tessera by a relative replace directive, so the
-      # sibling repository has to be present for the module to resolve.
-      - name: check out tessera alongside
-        uses: actions/checkout@v4
-        with:
-          repository: DAVANO-INNOVATION-LAB/tessera
-          path: ../tessera
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
@@ -54,10 +47,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: DAVANO-INNOVATION-LAB/tessera
-          path: ../tessera
       - uses: actions/setup-go@v5
         with: { go-version: "${{ env.GO_VERSION }}" }
       - name: staticcheck
