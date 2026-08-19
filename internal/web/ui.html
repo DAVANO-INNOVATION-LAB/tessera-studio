@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tessera Studio</title>
+<style>
+  :root{
+    --void:#f5f7f6; --panel:#fff; --panel-2:#eceff0; --line:#d7dedb;
+    --ink:#1a2129; --mute:#5b6672; --faint:#8a95a1;
+    --accent:#0f8f74; --accent-dim:#0f8f7420;
+    --crit:#c23a34; --crit-bg:#c23a3418;
+    --high:#b5730a; --high-bg:#b5730a18;
+    --med:#2f6bb0;  --med-bg:#2f6bb018;
+    --low:#5b6672;  --low-bg:#5b667218;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --void:#0b0e13; --panel:#141922; --panel-2:#1a212c; --line:#242d3a;
+      --ink:#dfe6ef; --mute:#8b97a8; --faint:#5f6b7c;
+      --accent:#54e0b8; --accent-dim:#54e0b81f;
+      --crit:#ff6b6b; --crit-bg:#ff6b6b1f;
+      --high:#f2b03d; --high-bg:#f2b03d1f;
+      --med:#6ba7e8;  --med-bg:#6ba7e81f;
+      --low:#8b97a8;  --low-bg:#8b97a81f;
+    }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--void);color:var(--ink);font-family:var(--sans);
+       font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  header{border-bottom:1px solid var(--line);padding:14px 20px;display:flex;
+         align-items:center;gap:14px;flex-wrap:wrap;background:var(--panel)}
+  .brand{font-family:var(--mono);font-size:13px;font-weight:600;letter-spacing:.14em;
+         text-transform:uppercase;color:var(--accent)}
+  .rootpath{font-family:var(--mono);font-size:12px;color:var(--faint);margin-left:auto}
+  main{display:grid;grid-template-columns:320px 1fr;gap:0;min-height:calc(100vh - 53px)}
+  @media(max-width:820px){main{grid-template-columns:1fr}}
+  aside{border-right:1px solid var(--line);padding:16px;overflow-y:auto;background:var(--panel)}
+  @media(max-width:820px){aside{border-right:0;border-bottom:1px solid var(--line)}}
+  .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+       color:var(--faint);margin:0 0 10px}
+  .crumb{font-family:var(--mono);font-size:11.5px;color:var(--mute);margin-bottom:10px;
+         word-break:break-all}
+  ul.files{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+  ul.files button{width:100%;text-align:left;background:none;border:0;border-radius:7px;
+    padding:7px 9px;font:inherit;font-size:13.5px;color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;gap:9px}
+  ul.files button:hover{background:var(--panel-2)}
+  ul.files button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .ic{font-family:var(--mono);font-size:11px;color:var(--faint);width:16px;flex:none}
+  .fmt{margin-left:auto;font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:5px;
+       background:var(--accent-dim);color:var(--accent);flex:none}
+  section.pane{padding:24px;overflow-y:auto}
+  .empty{color:var(--faint);font-size:14px;margin-top:40px;text-align:center}
+  h1{font-size:1.5rem;margin:0 0 4px;letter-spacing:-.01em;word-break:break-word}
+  .sub{color:var(--mute);font-family:var(--mono);font-size:12px;margin-bottom:20px}
+  .verdict{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;
+    padding:5px 11px;border-radius:20px;font-weight:600;margin-bottom:20px}
+  .v-Critical{color:var(--crit);background:var(--crit-bg)}
+  .v-High{color:var(--high);background:var(--high-bg)}
+  .v-Medium{color:var(--med);background:var(--med-bg)}
+  .v-Low{color:var(--low);background:var(--low-bg)}
+  .v-clean{color:var(--accent);background:var(--accent-dim)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1px;
+        background:var(--line);border:1px solid var(--line);border-radius:11px;
+        overflow:hidden;margin-bottom:22px}
+  .cell{background:var(--panel);padding:13px 15px}
+  .cell .k{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+           color:var(--faint)}
+  .cell .v{margin-top:4px;font-size:14px;word-break:break-word}
+  .cell .v.mono{font-family:var(--mono);font-size:12.5px}
+  h2{font-size:1rem;margin:26px 0 12px;letter-spacing:-.01em}
+  .finding{border:1px solid var(--line);border-left-width:3px;border-radius:9px;
+           padding:13px 15px;margin-bottom:9px;background:var(--panel)}
+  .finding.s-Critical{border-left-color:var(--crit)}
+  .finding.s-High{border-left-color:var(--high)}
+  .finding.s-Medium{border-left-color:var(--med)}
+  .finding.s-Low{border-left-color:var(--low)}
+  .fhead{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:5px}
+  .sev{font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+       font-weight:700;padding:3px 7px;border-radius:5px}
+  .sev.s-Critical{color:var(--crit);background:var(--crit-bg)}
+  .sev.s-High{color:var(--high);background:var(--high-bg)}
+  .sev.s-Medium{color:var(--med);background:var(--med-bg)}
+  .sev.s-Low{color:var(--low);background:var(--low-bg)}
+  .fid{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+  .ftitle{font-weight:650;font-size:14px}
+  .fdesc{color:var(--mute);font-size:13.5px;margin-top:5px}
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);
+        border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line)}
+  th{font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+     color:var(--mute);background:var(--panel-2)}
+  tr:last-child td{border-bottom:0}
+  td.mono{font-family:var(--mono);font-size:11.5px;color:var(--mute);word-break:break-all}
+  .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:22px}
+  .actions a{font-family:var(--mono);font-size:12px;text-decoration:none;padding:9px 15px;
+    border-radius:8px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-dim)}
+  .actions a:hover{background:var(--accent);color:var(--void)}
+  .err{color:var(--crit);background:var(--crit-bg);border-radius:9px;padding:13px 15px;
+       font-size:13.5px}
+  .spin{color:var(--faint);font-family:var(--mono);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <span class="brand">&#9672; Tessera Studio</span>
+  <span class="rootpath" id="root"></span>
+</header>
+
+<main>
+  <aside>
+    <p class="lbl">Models</p>
+    <div class="crumb" id="crumb">/</div>
+    <ul class="files" id="files"></ul>
+  </aside>
+
+  <section class="pane" id="pane">
+    <p class="empty">Select a model file to analyse.</p>
+  </section>
+</main>
+
+<script>
+const el = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => (
+  {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let cwd = '';
+
+async function browse(path) {
+  const res = await fetch('/api/browse?path=' + encodeURIComponent(path));
+  const data = await res.json();
+  if (data.error) { el('files').innerHTML = '<li class="err">' + esc(data.error) + '</li>'; return; }
+
+  cwd = data.path === '.' ? '' : data.path;
+  el('crumb').textContent = '/' + (cwd || '');
+
+  const items = [];
+  if (cwd) {
+    const up = cwd.split('/').slice(0, -1).join('/');
+    items.push(`<li><button data-dir="${esc(up)}"><span class="ic">..</span>parent</button></li>`);
+  }
+  for (const e of data.entries) {
+    if (e.isDir) {
+      items.push(`<li><button data-dir="${esc(e.path)}"><span class="ic">&#9656;</span>${esc(e.name)}</button></li>`);
+    } else if (e.format) {
+      items.push(`<li><button data-file="${esc(e.path)}"><span class="ic">&#9679;</span>${esc(e.name)}`
+        + `<span class="fmt">${esc(e.format)}</span></button></li>`);
+    }
+  }
+  el('files').innerHTML = items.join('') ||
+    '<li class="spin">no models or folders here</li>';
+}
+
+el('files').addEventListener('click', (ev) => {
+  const b = ev.target.closest('button');
+  if (!b) return;
+  if (b.dataset.dir !== undefined) browse(b.dataset.dir);
+  else if (b.dataset.file) analyse(b.dataset.file);
+});
+
+async function analyse(path) {
+  el('pane').innerHTML = '<p class="spin">analysing ' + esc(path) + ' &hellip;</p>';
+  const res = await fetch('/api/analyze?path=' + encodeURIComponent(path));
+  const data = await res.json();
+  if (data.error) { el('pane').innerHTML = '<div class="err">' + esc(data.error) + '</div>'; return; }
+  render(data.artifact, data.worst, path);
+}
+
+function render(a, worst, path) {
+  const lic = (a.licenses || [])[0];
+  const cells = [
+    ['format', a.format, true],
+    ['version', a.identity.version, false],
+    ['supplier', a.identity.organization || a.identity.author, false],
+    ['licence', lic ? (lic.spdxID || lic.raw) : '', true],
+    ['architecture', a.params.architecture, false],
+    ['quantization', a.params.quantization, true],
+    ['tensors', a.tensorCount ? String(a.tensorCount) : '', true],
+    ['producer', a.runtime.producer, false],
+  ].filter(c => c[1]);
+
+  const findings = (a.findings || []).slice().sort(
+    (x, y) => rank(x.severity) - rank(y.severity));
+
+  const verdict = worst
+    ? `<span class="verdict v-${esc(worst)}">&#9679; worst finding: ${esc(worst)}</span>`
+    : `<span class="verdict v-clean">&#9679; no findings</span>`;
+
+  el('pane').innerHTML = `
+    <h1>${esc(a.identity.name || 'unnamed model')}</h1>
+    <p class="sub">${esc(path)}</p>
+    ${verdict}
+    <div class="grid">
+      ${cells.map(([k, v, m]) => `<div class="cell"><div class="k">${esc(k)}</div>
+        <div class="v${m ? ' mono' : ''}">${esc(v)}</div></div>`).join('')}
+    </div>
+
+    <h2>Findings (${findings.length})</h2>
+    ${findings.length ? findings.map(f => `
+      <div class="finding s-${esc(f.severity)}">
+        <div class="fhead">
+          <span class="sev s-${esc(f.severity)}">${esc(f.severity)}</span>
+          <span class="fid">${esc(f.id)}</span>
+          <span class="ftitle">${esc(f.title)}</span>
+        </div>
+        <div class="fdesc">${esc(f.description)}</div>
+      </div>`).join('')
+      : '<p class="spin">nothing to report from this file&rsquo;s metadata</p>'}
+
+    <h2>Files (${(a.files || []).length})</h2>
+    <table><thead><tr><th>path</th><th>role</th><th>size</th><th>sha-256</th></tr></thead>
+    <tbody>${(a.files || []).map(f => `<tr>
+      <td>${esc(f.path)}</td><td class="mono">${esc(f.role)}</td>
+      <td class="mono">${fmtSize(f.size)}</td>
+      <td class="mono">${esc((f.sha256 || '').slice(0, 16))}&hellip;</td></tr>`).join('')}
+    </tbody></table>
+
+    <div class="actions">
+      <a href="/api/bom?format=cyclonedx&path=${encodeURIComponent(path)}">Download CycloneDX 1.6</a>
+      <a href="/api/bom?format=spdx&path=${encodeURIComponent(path)}">Download SPDX 3.0.1</a>
+    </div>`;
+}
+
+const rank = (s) => ({Critical: 0, High: 1, Medium: 2, Low: 3}[s] ?? 4);
+const fmtSize = (n) => {
+  if (!n) return '';
+  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return n.toFixed(i ? 1 : 0) + ' ' + u[i];
+};
+
+browse('');
+</script>
+</body>
+</html>
