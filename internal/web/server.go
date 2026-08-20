@@ -242,11 +242,95 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, err)
 		return
 	}
+
+	// The walk is part of an analysis here rather than a separate request. The
+	// formats this tool parses natively cannot carry code; what can is sitting
+	// beside them, and a result that showed only the model would be reassuring
+	// about the wrong file.
+	parsed := len(art.Findings)
+	truncated := false
+	if r.URL.Query().Get("deep") != "0" {
+		if rep, err := tessera.Inspect(ctx, filepath.Dir(target)); err == nil {
+			art.Findings = mergeFindings(art.Findings, rep.Findings)
+			truncated = rep.Truncated
+		}
+	}
+	walked := art.Findings[min(parsed, len(art.Findings)):]
+
+	results := []tessera.ScannerResult{{
+		Scanner:    "tessera",
+		Status:     tessera.ScannerStatusFor(parsed),
+		Findings:   int32(parsed),
+		Severities: tally(art.Findings[:parsed], false),
+		Drift:      tally(art.Findings[:parsed], true),
+		Produced:   boolPtr(true),
+	}, {
+		Scanner:    "model-inspector",
+		Status:     tessera.ScannerStatusFor(len(walked)),
+		Findings:   int32(len(walked)),
+		Severities: tally(walked, false),
+	}}
+	verdict := tessera.Gate(results, tessera.GateArtifact{
+		URI:    r.URL.Query().Get("path"),
+		Digest: art.PrimaryFile().SHA256,
+		Format: string(art.Format),
+	}, nil, nil, time.Now())
+
 	writeJSON(w, map[string]any{
-		"artifact": art,
-		"worst":    tessera.Worst(art.Findings),
+		"artifact":  art,
+		"worst":     tessera.Worst(art.Findings),
+		"verdict":   verdict,
+		"truncated": truncated,
+		"deep":      r.URL.Query().Get("deep") != "0",
 	})
 }
+
+// mergeFindings appends the walk's findings, dropping any the parse already
+// reported for the same place. The overlap is deliberate — the parser reads a
+// safetensors header to describe the model and the walker reads it again
+// because it cannot assume the parser ran — so without this one defect would be
+// counted twice and the artifact would score worse for no reason.
+func mergeFindings(parsed, walked []tessera.Finding) []tessera.Finding {
+	seen := make(map[string]bool, len(parsed))
+	for _, f := range parsed {
+		seen[f.ID+"\x00"+f.Location] = true
+	}
+	for _, f := range walked {
+		key := f.ID + "\x00" + f.Location
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		parsed = append(parsed, f)
+	}
+	return parsed
+}
+
+// tally counts findings by severity, drift separately, because the gate treats
+// drift separately.
+func tally(findings []tessera.Finding, driftOnly bool) tessera.SeverityCounts {
+	var c tessera.SeverityCounts
+	for _, f := range findings {
+		if (f.Category == "drift") != driftOnly {
+			continue
+		}
+		switch f.Severity {
+		case tessera.SeverityCritical:
+			c.Critical++
+		case tessera.SeverityHigh:
+			c.High++
+		case tessera.SeverityMedium:
+			c.Medium++
+		case tessera.SeverityLow:
+			c.Low++
+		default:
+			c.Unknown++
+		}
+	}
+	return c
+}
+
+func boolPtr(b bool) *bool { return &b }
 
 // handleCoverage reports how far a model goes toward a published
 // minimum-elements standard.
@@ -320,6 +404,12 @@ func (s *Server) handleBOM(w http.ResponseWriter, r *http.Request) {
 	case "spdx":
 		data, err = tessera.SPDX(art, at)
 		ext = ".spdx.json"
+	case "sarif":
+		data, err = tessera.SARIF(art, at)
+		ext = ".sarif.json"
+	case "cyclonedx-1.7":
+		data, err = tessera.CycloneDXVersion(art, at, tessera.CycloneDX17)
+		ext = ".cdx.json"
 	default:
 		data, err = tessera.CycloneDX(art, at)
 		ext = ".cdx.json"

@@ -122,7 +122,31 @@
   .err{color:var(--crit);background:var(--crit-bg);border-radius:9px;padding:13px 15px;
        font-size:13.5px}
   .spin{color:var(--faint);font-family:var(--mono);font-size:12px}
-</style>
+
+    /* The verdict bar. It is the first thing on the page because it is the
+       answer; everything below it is the evidence for that answer. Colour
+       carries the state, but the word is always present too — a reader who
+       cannot distinguish the hues still gets the verdict. */
+    .verdictbar{border:1px solid var(--line);border-left-width:3px;border-radius:8px;
+      padding:.75rem .9rem;margin:.85rem 0 1.1rem;background:var(--panel-2)}
+    .verdictbar.vb-ok{border-left-color:var(--accent);background:var(--accent-dim)}
+    .verdictbar.vb-warn{border-left-color:var(--high);background:var(--high-bg)}
+    .verdictbar.vb-bad{border-left-color:var(--crit);background:var(--crit-bg)}
+    .vb-head{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap}
+    .vb-name{font-weight:650;font-size:1.05rem;letter-spacing:.01em}
+    .vb-ok .vb-name{color:var(--accent)}
+    .vb-warn .vb-name{color:var(--high)}
+    .vb-bad .vb-name{color:var(--crit)}
+    .vb-risk{font-family:var(--mono);font-size:.78rem;color:var(--mute);
+      border:1px solid var(--line);border-radius:999px;padding:.08rem .5rem}
+    .vb-deep{font-family:var(--mono);font-size:.72rem;color:var(--accent);
+      border:1px solid currentColor;border-radius:999px;padding:.08rem .5rem;opacity:.85}
+    .vb-deep.vb-off{color:var(--faint)}
+    .vb-list{margin:.6rem 0 0;padding-left:1.05rem;font-size:.86rem;color:var(--ink)}
+    .vb-list li{margin:.2rem 0}
+    .vb-list .mono{font-family:var(--mono);font-size:.78rem;color:var(--mute);margin-right:.4rem}
+    .vb-trunc{margin:.55rem 0 0;font-size:.82rem;color:var(--high)}
+  </style>
 </head>
 <body>
 <header>
@@ -186,11 +210,12 @@ async function analyse(path) {
   const res = await fetch('/api/analyze?path=' + encodeURIComponent(path));
   const data = await res.json();
   if (data.error) { el('pane').innerHTML = '<div class="err">' + esc(data.error) + '</div>'; return; }
-  render(data.artifact, data.worst, path);
-  loadCoverage(path, 'g7');
+  render(data, path);
+  loadCoverage(path, 'cisa-2026');
 }
 
-function render(a, worst, path) {
+function render(data, path) {
+  const a = data.artifact, worst = data.worst, v = data.verdict || {};
   const lic = (a.licenses || [])[0];
   const cells = [
     ['format', a.format, true],
@@ -206,9 +231,31 @@ function render(a, worst, path) {
   const findings = (a.findings || []).slice().sort(
     (x, y) => rank(x.severity) - rank(y.severity));
 
-  const verdict = worst
-    ? `<span class="verdict v-${esc(worst)}">&#9679; worst finding: ${esc(worst)}</span>`
-    : `<span class="verdict v-clean">&#9679; no findings</span>`;
+  // The gate's verdict leads, because it is the question somebody opened this
+  // page with. Worst severity sits beside it rather than instead of it: a
+  // Critical that policy tolerates and a Critical that quarantines look
+  // identical until the verdict says which it is.
+  const vd = v.Verdict || v.verdict || '';
+  const vclass = {Approved:'ok', ReviewRequired:'warn', Quarantined:'bad'}[vd] || 'ok';
+  const violations = v.Violations || v.violations || [];
+  const risk = v.RiskScore ?? v.riskScore ?? 0;
+
+  const verdict = vd ? `
+    <div class="verdictbar vb-${vclass}">
+      <div class="vb-head">
+        <span class="vb-name">${esc(vd)}</span>
+        <span class="vb-risk">risk ${esc(String(risk))}</span>
+        ${worst ? `<span class="verdict v-${esc(worst)}">worst finding: ${esc(worst)}</span>`
+                : `<span class="verdict v-clean">no findings</span>`}
+        <span class="vb-deep${data.deep ? '' : ' vb-off'}">${data.deep ? 'deep walk' : 'model only'}</span>
+      </div>
+      ${violations.length ? '<ul class="vb-list">' + violations.map(x =>
+        `<li><span class="mono">${esc(x.Rule || x.rule)}</span> ${esc(x.Message || x.message)}</li>`
+      ).join('') + '</ul>' : ''}
+      ${data.truncated ? '<p class="vb-trunc">The walk was truncated, so part of the artifact was never examined. A clean result over a partial walk is not a clean artifact.</p>' : ''}
+    </div>` :
+    (worst ? `<span class="verdict v-${esc(worst)}">&#9679; worst finding: ${esc(worst)}</span>`
+           : `<span class="verdict v-clean">&#9679; no findings</span>`);
 
   el('pane').innerHTML = `
     <h1>${esc(a.identity.name || 'unnamed model')}</h1>
@@ -241,14 +288,18 @@ function render(a, worst, path) {
 
     <h2>Standards coverage</h2>
     <div class="tabs" role="tablist">
-      <button role="tab" data-std="g7" aria-selected="true">G7 minimum elements</button>
-      <button role="tab" data-std="cert-in" aria-selected="false">CERT-In AIBOM</button>
+      <button role="tab" data-std="cisa-2026" aria-selected="true">CISA 2026</button>
+      <button role="tab" data-std="g7" aria-selected="false">G7 for AI</button>
+      <button role="tab" data-std="cert-in" aria-selected="false">CERT-In</button>
+      <button role="tab" data-std="bsi" aria-selected="false">BSI TR-03183-2</button>
     </div>
     <div class="cov" id="cov"><p class="spin">loading&hellip;</p></div>
 
     <div class="actions">
-      <a href="/api/bom?format=cyclonedx&path=${encodeURIComponent(path)}">Download CycloneDX 1.6</a>
-      <a href="/api/bom?format=spdx&path=${encodeURIComponent(path)}">Download SPDX 3.0.1</a>
+      <a href="/api/bom?format=cyclonedx&path=${encodeURIComponent(path)}">CycloneDX 1.6</a>
+      <a href="/api/bom?format=cyclonedx-1.7&path=${encodeURIComponent(path)}">CycloneDX 1.7</a>
+      <a href="/api/bom?format=spdx&path=${encodeURIComponent(path)}">SPDX 3.0.1</a>
+      <a href="/api/bom?format=sarif&path=${encodeURIComponent(path)}">SARIF 2.1.0</a>
     </div>`;
 }
 
