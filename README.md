@@ -84,6 +84,42 @@ internal/web          routes, path confinement, and the embedded UI
 The interface is a single embedded `ui.html` — no build step, no bundler, no
 node_modules. `go build` produces one binary with the UI inside it.
 
+
+## Running it
+
+One image, one process, 31 MB. No shell, no package manager, no interpreter —
+which is the right shape for something whose job is to open files it does not
+trust.
+
+```bash
+docker run --rm -p 7777:7777 -v /path/to/models:/models:ro \
+  ghcr.io/davano-innovation-lab/tessera:latest
+```
+
+The image also carries the command-line tools, so the same container scans in a
+pipeline as serves the interface:
+
+```bash
+docker run --rm -v /path/to/models:/models:ro \
+  --entrypoint /usr/local/bin/tessera \
+  ghcr.io/davano-innovation-lab/tessera:latest scan /models/llama3
+```
+
+`tessera`, `tessera-sign` and `tessera-bundle` are all present. Signing and
+offline data bundles are included because an operator working across an air gap
+needs them in the same place as everything else — asking them to assemble a
+toolchain on the far side of a gap is asking them not to bother.
+
+Every binary reports the release it was built from, so the image can account for
+what is inside it.
+
+**Seven Go modules, one container.** A module is a source boundary, not a
+deployment boundary: the split exists so a program embedding the parser does not
+inherit an AWS SDK to do it. It was never meant to imply seven things to run.
+
+The Kubernetes operator is a separate image and a separate decision. Nobody
+should need a cluster to scan a model.
+
 ## Licence
 
 Apache-2.0.

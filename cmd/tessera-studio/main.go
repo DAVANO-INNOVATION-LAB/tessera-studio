@@ -36,20 +36,32 @@ var version = "dev"
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:7777", "address to listen on (loopback by default)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Usage = func() {
 		fmt.Fprint(os.Stderr, `tessera-studio - local interface for model bills of materials
 
 Usage:
   tessera-studio [--addr HOST:PORT] <models-directory>
+  tessera-studio --version
 
 Browse a directory of models, analyse one, read the findings its metadata
-discloses, and download a CycloneDX 1.6 or SPDX 3.0.1 bill of materials.
+discloses, and download a bill of materials as CycloneDX 1.6 or 1.7, SPDX 3.0.1
+or SARIF 2.1.0.
 
 Every analysis is confined to the directory given here, and the server listens
 on loopback unless told otherwise.
 `)
 	}
 	flag.Parse()
+
+	// Answered before anything else, and without needing a models directory.
+	// A container that cannot say what version it is running is not auditable,
+	// and requiring an argument to find out makes the answer awkward to reach
+	// from a health check or a build script.
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	if flag.NArg() != 1 {
 		flag.Usage()
